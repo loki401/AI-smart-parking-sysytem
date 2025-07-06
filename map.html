@@ -1,0 +1,244 @@
+
+{% extends "base.html" %}
+
+{% block title %}Find Parking - EasyPark{% endblock %}
+
+{% block head_extras %}
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+<style>
+    #map { width: 100%; height: 100%; }
+    .map-container { height: 600px; position: relative; border-radius: 12px; overflow: hidden; }
+    .map-controls { position: absolute; top: 10px; right: 10px; z-index: 1; display: flex; flex-direction: column; gap: 8px; }
+    .map-control-btn { background: white; border: none; width: 38px; height: 38px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .map-control-btn i { width: 20px; height: 20px; }
+    .map-filter { position: absolute; top: 10px; left: 10px; z-index: 1; background: white; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); padding: 10px; width: 280px; }
+    .parking-popup { min-width: 200px; }
+    .parking-popup h3 { margin-top: 0; margin-bottom: 5px; font-size: 16px; }
+    .parking-popup-info { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+    .parking-popup-info span { display: flex; align-items: center; gap: 5px; font-size: 13px; }
+    .parking-popup-info span i { width: 14px; height: 14px; }
+    .parking-popup-actions { display: flex; gap: 10px; }
+    .parking-popup-actions button { flex: 1; padding: 5px; font-size: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="map-page">
+    <div class="container">
+        <div class="section-header center">
+            <h1>Find Available Parking</h1>
+            <p>Locate and reserve parking spots in real-time across the city</p>
+        </div>
+        
+        <div class="map-layout">
+            <div class="map-container" x-data="{ showFilters: false }">
+                <!-- Map Filter Panel -->
+                <div class="map-filter" x-show="showFilters" @click.away="showFilters = false">
+                    <h3>Filter Parking</h3>
+                    
+                    <div class="form-group">
+                        <label>Price Range</label>
+                        <div class="range-slider">
+                            <input type="range" min="0" max="20" step="0.5" value="10">
+                            <div class="range-labels">
+                                <span>$0</span>
+                                <span>$10</span>
+                                <span>$20+</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Availability</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" checked>
+                                <span>Available now</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox">
+                                <span>Reserved spots</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" checked>
+                                <span>Premium spots</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Features</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox">
+                                <span>Covered parking</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox">
+                                <span>EV charging</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox">
+                                <span>24/7 access</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox">
+                                <span>Security cameras</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button class="btn-primary btn-sm">Apply Filters</button>
+                        <button class="btn-text btn-sm" @click="showFilters = false">Cancel</button>
+                    </div>
+                </div>
+                
+                <!-- Map Controls -->
+                <div class="map-controls">
+                    <button class="map-control-btn" @click="showFilters = !showFilters">
+                        <i data-lucide="filter"></i>
+                    </button>
+                    <button class="map-control-btn" id="locate-me">
+                        <i data-lucide="navigation"></i>
+                    </button>
+                    <button class="map-control-btn" id="toggle-terrain">
+                        <i data-lucide="layers"></i>
+                    </button>
+                </div>
+                
+                <!-- Map Container -->
+                <div id="map"></div>
+            </div>
+            
+            <div class="parking-list">
+                <div class="search-box">
+                    <div class="search-input">
+                        <i data-lucide="search"></i>
+                        <input type="text" id="location-search" placeholder="Enter location or address">
+                    </div>
+                    <button class="btn-primary search-btn">Search</button>
+                </div>
+                
+                <div class="parking-locations" id="parking-list-container">
+                    <!-- Parking locations will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Initialize Mapbox
+    mapboxgl.accessToken = 'pk.eyJ1IjoiZXhhbXBsZXVzZXIiLCJhIjoiY2t6OGlwOXo4MmFteTJ1bXQ5Nm14eXMyNSJ9._yS-FJPExN0OCxwr23VdMg';
+    
+    const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [{{ parking_locations[0].coordinates.lng }}, {{ parking_locations[0].coordinates.lat }}],
+        zoom: 13
+    });
+    
+    // Add navigation controls
+    map.addControl(new mapboxgl.NavigationControl());
+    
+    // Add parking locations to map
+    const parkingLocations = {{ parking_locations|tojson }};
+    const parkingListContainer = document.getElementById('parking-list-container');
+    
+    map.on('load', function() {
+        // Add markers for each parking location
+        parkingLocations.forEach(location => {
+            // Create popup content
+            const popupContent = `
+                <div class="parking-popup">
+                    <h3>${location.name}</h3>
+                    <div class="parking-popup-info">
+                        <span><i data-lucide="map-pin"></i> ${location.address}</span>
+                        <span><i data-lucide="car"></i> ${location.availableSpots} available / ${location.totalSpots} total</span>
+                        <span><i data-lucide="credit-card"></i> From $${location.pricing.hourly}/hr</span>
+                    </div>
+                    <div class="parking-popup-actions">
+                        <button class="btn-secondary btn-sm view-garage-btn" data-id="${location.id}">View Details</button>
+                        <button class="btn-primary btn-sm" onclick="window.location.href='/#parking-visualizer'">Book Now</button>
+                    </div>
+                </div>
+            `;
+            
+            // Create marker element
+            const markerEl = document.createElement('div');
+            markerEl.className = 'custom-marker';
+            markerEl.style.width = '30px';
+            markerEl.style.height = '40px';
+            markerEl.style.backgroundImage = 'url(https://cdn0.iconfinder.com/data/icons/small-n-flat/24/678111-map-marker-512.png)';
+            markerEl.style.backgroundSize = 'cover';
+            markerEl.style.cursor = 'pointer';
+            
+            // Add marker to map
+            const marker = new mapboxgl.Marker(markerEl)
+                .setLngLat([location.coordinates.lng, location.coordinates.lat])
+                .setPopup(new mapboxgl.Popup().setHTML(popupContent))
+                .addTo(map);
+            
+            // Add parking location to sidebar list
+            const locationEl = document.createElement('div');
+            locationEl.className = 'parking-location-item';
+            locationEl.innerHTML = `
+                <h3>${location.name}</h3>
+                <div class="location-details">
+                    <span><i data-lucide="map-pin"></i> ${location.address}</span>
+                    <span><i data-lucide="car"></i> ${location.availableSpots} available</span>
+                    <span><i data-lucide="credit-card"></i> From $${location.pricing.hourly}/hr</span>
+                </div>
+                <div class="location-actions">
+                    <button class="btn-secondary btn-sm" onclick="window.location.href='/#parking-visualizer'">View Spots</button>
+                    <button class="btn-primary btn-sm" onclick="map.flyTo({center: [${location.coordinates.lng}, ${location.coordinates.lat}], zoom: 15})">Show on Map</button>
+                </div>
+            `;
+            parkingListContainer.appendChild(locationEl);
+        });
+        
+        // Initialize all icon elements in popups
+        lucide.createIcons({
+            attrs: {
+                'stroke-width': 1.5,
+                'width': 14,
+                'height': 14
+            }
+        });
+    });
+    
+    // Locate me button functionality
+    document.getElementById('locate-me').addEventListener('click', () => {
+        navigator.geolocation.getCurrentPosition(position => {
+            map.flyTo({
+                center: [position.coords.longitude, position.coords.latitude],
+                zoom: 15
+            });
+        }, error => {
+            console.error('Error getting location:', error);
+            alert('Unable to get your location. Make sure location services are enabled.');
+        });
+    });
+    
+    // Toggle terrain button functionality
+    let terrainEnabled = false;
+    document.getElementById('toggle-terrain').addEventListener('click', () => {
+        terrainEnabled = !terrainEnabled;
+        map.setStyle(terrainEnabled ? 
+            'mapbox://styles/mapbox/satellite-streets-v12' : 
+            'mapbox://styles/mapbox/streets-v12'
+        );
+    });
+    
+    // Initialize icons in map controls
+    lucide.createIcons({
+        attrs: {
+            'stroke-width': 2
+        }
+    });
+</script>
+{% endblock %}

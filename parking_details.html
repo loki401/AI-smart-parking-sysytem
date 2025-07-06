@@ -1,0 +1,260 @@
+
+{% extends "base.html" %}
+
+{% block title %}Parking Spot {{ spot.id }} - EasyPark{% endblock %}
+
+{% block content %}
+<section class="spot-details-page">
+    <div class="container">
+        <div class="breadcrumbs">
+            <a href="/">Home</a> &gt; 
+            <a href="/#parking-visualizer">Parking Map</a> &gt; 
+            <span>Spot {{ spot.id }}</span>
+        </div>
+        
+        <div class="spot-header">
+            <h1>Parking Spot {{ spot.id }}</h1>
+            <div class="spot-badges">
+                <span class="status available">Available</span>
+                <span class="price">${{ "%.2f"|format(spot.price) }}/hour</span>
+            </div>
+        </div>
+        
+        <div class="detail-layout">
+            <div class="spot-image">
+                <img src="{{ url_for('static', filename='images/parking-spot.jpg') }}" alt="Parking Spot {{ spot.id }}">
+            </div>
+            
+            <div class="spot-info">
+                <div class="info-card">
+                    <h3>Spot Information</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <i data-lucide="map-pin"></i>
+                            <div>
+                                <h4>Location</h4>
+                                <p>Level 2, Row {{ spot.id.split('-')[0] }}, Spot {{ spot.id.split('-')[1] }}</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <i data-lucide="ruler"></i>
+                            <div>
+                                <h4>Size</h4>
+                                <p>Standard (2.5m x 5m)</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <i data-lucide="shield"></i>
+                            <div>
+                                <h4>Security</h4>
+                                <p>24/7 Surveillance & Patrol</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <i data-lucide="lightbulb"></i>
+                            <div>
+                                <h4>Lighting</h4>
+                                <p>Well-lit area</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="reservation-card">
+                    <h3>Reserve This Spot</h3>
+                    <form id="reservation-form" class="booking-form">
+                        <div class="form-group">
+                            <label>Arrival Date & Time</label>
+                            <div class="date-time-inputs">
+                                <input type="date" id="arrival-date" class="date-input" required>
+                                <input type="time" id="arrival-time" class="time-input" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Departure Date & Time</label>
+                            <div class="date-time-inputs">
+                                <input type="date" id="departure-date" class="date-input" required>
+                                <input type="time" id="departure-time" class="time-input" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Vehicle Information</label>
+                            <input type="text" id="vehicle-plate" placeholder="License Plate Number" required>
+                        </div>
+                        
+                        {% if not session.user_email %}
+                        <div class="form-group">
+                            <label>Contact Information</label>
+                            <input type="text" placeholder="Full Name" required>
+                            <input type="email" placeholder="Email Address" required>
+                            <input type="tel" placeholder="Phone Number" required>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="payment-options">
+                            <h4>Payment Method</h4>
+                            <div class="payment-methods">
+                                <label class="payment-method">
+                                    <input type="radio" name="payment" value="card" checked>
+                                    <i data-lucide="credit-card"></i>
+                                    <span>Credit Card</span>
+                                </label>
+                                <label class="payment-method">
+                                    <input type="radio" name="payment" value="paypal">
+                                    <i data-lucide="credit-card"></i>
+                                    <span>PayPal</span>
+                                </label>
+                                <label class="payment-method">
+                                    <input type="radio" name="payment" value="apple">
+                                    <i data-lucide="smartphone"></i>
+                                    <span>Apple Pay</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="fee-summary">
+                            <div class="fee-item">
+                                <span>Duration</span>
+                                <span id="duration">2 hours</span>
+                            </div>
+                            <div class="fee-item">
+                                <span>Spot Fee</span>
+                                <span id="spot-fee">${{ "%.2f"|format(spot.price * 2) }}</span>
+                            </div>
+                            <div class="fee-item">
+                                <span>Service Fee</span>
+                                <span>$1.00</span>
+                            </div>
+                            <div class="fee-item total">
+                                <span>Total</span>
+                                <span id="total-fee">${{ "%.2f"|format(spot.price * 2 + 1) }}</span>
+                            </div>
+                        </div>
+                        
+                        {% if not session.user_email %}
+                        <div class="login-prompt">
+                            <p>Already have an account? <a href="{{ url_for('login', next='parking_details', spot_id=spot.id) }}">Log in</a> for faster checkout.</p>
+                        </div>
+                        {% endif %}
+                        
+                        <button type="submit" class="btn-primary full-width">
+                            <i data-lucide="check-circle"></i>
+                            Confirm Reservation
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Set default date values to today
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    
+    const arrivalDate = document.getElementById('arrival-date');
+    const arrivalTime = document.getElementById('arrival-time');
+    const departureDate = document.getElementById('departure-date');
+    const departureTime = document.getElementById('departure-time');
+    
+    // Format date to YYYY-MM-DD for input fields
+    function formatDate(date) {
+        return date.toISOString().split('T')[0];
+    }
+    
+    // Set default values
+    arrivalDate.value = formatDate(today);
+    arrivalTime.value = '12:00';
+    departureDate.value = formatDate(today);
+    departureTime.value = '14:00';
+    
+    // Calculate duration and fees when time changes
+    function updateFees() {
+        const arrival = new Date(`${arrivalDate.value}T${arrivalTime.value}`);
+        const departure = new Date(`${departureDate.value}T${departureTime.value}`);
+        
+        if (isNaN(arrival.getTime()) || isNaN(departure.getTime())) {
+            return;
+        }
+        
+        // Calculate duration in hours
+        const durationHours = (departure - arrival) / (1000 * 60 * 60);
+        
+        if (durationHours <= 0) {
+            alert('Departure time must be after arrival time');
+            departureTime.value = arrivalTime.value;
+            departureDate.value = arrivalDate.value;
+            return;
+        }
+        
+        // Update display
+        const hourText = durationHours === 1 ? 'hour' : 'hours';
+        document.getElementById('duration').textContent = `${durationHours.toFixed(1)} ${hourText}`;
+        
+        const spotFee = {{ spot.price }} * durationHours;
+        document.getElementById('spot-fee').textContent = `$${spotFee.toFixed(2)}`;
+        
+        const totalFee = spotFee + 1; // Add $1 service fee
+        document.getElementById('total-fee').textContent = `$${totalFee.toFixed(2)}`;
+    }
+    
+    // Add event listeners to update fees when times change
+    arrivalDate.addEventListener('change', updateFees);
+    arrivalTime.addEventListener('change', updateFees);
+    departureDate.addEventListener('change', updateFees);
+    departureTime.addEventListener('change', updateFees);
+    
+    // Handle form submission
+    document.getElementById('reservation-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        {% if not session.user_email %}
+        if (!confirm('You are not logged in. Would you like to create an account to save this reservation?')) {
+            return;
+        }
+        {% endif %}
+        
+        // Collect form data
+        const data = {
+            spotId: '{{ spot.id }}',
+            arrivalDate: arrivalDate.value,
+            arrivalTime: arrivalTime.value,
+            departureDate: departureDate.value,
+            departureTime: departureTime.value,
+            vehiclePlate: document.getElementById('vehicle-plate').value
+        };
+        
+        // Send reservation request
+        fetch('/api/reserve', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Reservation confirmed! You will receive a confirmation email shortly.');
+                {% if session.user_email %}
+                window.location.href = '/dashboard';
+                {% else %}
+                window.location.href = '/';
+                {% endif %}
+            } else {
+                alert('Failed to reserve spot: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred. Please try again.');
+        });
+    });
+</script>
+{% endblock %}
